@@ -1,9 +1,4 @@
----
-title: "Human Activity Recognition Analysis"
-author: "Sebastian Bolz"
-date: "18. November 2014"
-output: html_document
----
+# Human Activity Recognition Analysis
 
 This analysis is part of the programming assignment for the MOOC
 [Practical Machine Learning](https://www.coursera.org/course/predmachlearn). It
