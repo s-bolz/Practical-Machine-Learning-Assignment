@@ -194,58 +194,79 @@ hr {
 uses the
 <a href="http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201">Weight Lifting Dataset</a>
 by E. Velloso, A. Bulling, H. Gellersen, W. Ugulino, and H. Fuks to predict the
-quality of barbell lifts.</p>
+quality of barbell lifts. The assignment consists of two parts:</p>
+
+<ol>
+<li>this report that details the process of finding a model that predicts the quality of the exercise on a given training data set</li>
+<li>prediction on a given testing data set of which we do not know the outcome</li>
+</ol>
+
+<h2>Model Building Strategy</h2>
+
+<p>The grade of the second part of the assignment is based on the prediction success rate of our model on the testing data set. In order to achieve the highest grade we should find a model that is tuned perfectly on the test set - even if it is overfitted. So we decide against following the standard procedure of exploring only our training data and holding back the testing data until the end where we predict on it only once. On the other hand we still want to reduce overfitting as much as possible. Therefore we follow the following model building strategy:</p>
+
+<ol>
+<li>minimal exploratory data analysis on the training and testing data sets</li>
+<li>splitting of the training data set into a training and a validation partition</li>
+<li>building several models with cross-validation against the training partition</li>
+<li>evaluating the models against the validation partition</li>
+<li>selecting a model based on its purpose</li>
+</ol>
+
+<p>We choose to build our models using the random forests algorithm with 10-fold cross-validation.</p>
 
 <h2>Loading, Subsetting and Splitting the Data</h2>
 
-<p>We start with downloading the training and testing data sets and loading both sets into R. We rename the testing data set into submission data set as we will later split off a testing data set from our training data set with which we estimate the out of sample error rate.</p>
+<p>We start with downloading the training and testing data sets and loading both sets into R.</p>
 
 <pre><code class="r">download.file(&quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv&quot;, &quot;pml-training.csv&quot;, &quot;curl&quot;)
-download.file(&quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-submission.csv&quot;, &quot;pml-submission.csv&quot;, &quot;curl&quot;)
+download.file(&quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;, &quot;pml-testing.csv&quot;, &quot;curl&quot;)
 training &lt;- read.csv(&quot;pml-training.csv&quot;)
-submission &lt;- read.csv(&quot;pml-testing.csv&quot;)
+testing &lt;- read.csv(&quot;pml-testing.csv&quot;)
 </code></pre>
+
+<h2>Exploratory Data Analysis</h2>
 
 <p>What are the dimensions of both data sets?</p>
 
 <pre><code class="r">data.frame (
     trainingDimensions = dim(training),
-    submissionDimensions  = dim(submission)
+    testingDimensions  = dim(testing)
 )
 </code></pre>
 
-<pre><code>##   trainingDimensions submissionDimensions
-## 1              19622                   20
-## 2                160                  160
+<pre><code>##   trainingDimensions testingDimensions
+## 1              19622                20
+## 2                160               160
 </code></pre>
 
-<p>Both data sets have the same number of columns. Let&#39;s have a look if some of them are different.</p>
+<p>Both sets have the same number of columns. Let&#39;s have a look if some of them are different.</p>
 
 <pre><code class="r">data.frame (
-    notInsubmission  = setdiff(names(training), names(submission)),
-    notInTraining = setdiff(names(submission), names(training))
+    notIntesting  = setdiff(names(training), names(testing)),
+    notInTraining = setdiff(names(testing), names(training))
 )
 </code></pre>
 
-<pre><code>##   notInsubmission notInTraining
-## 1          classe    problem_id
+<pre><code>##   notIntesting notInTraining
+## 1       classe    problem_id
 </code></pre>
 
-<p>The submission data set has no outcome variable but has an identifier column instead. This was expected and does not offer us any possibility to reduce the predictors from the training set. Now let&#39;s have a look at NA&#39;s. If we find fields that have lots of NA&#39;s in the submission data set it would be sensible to exclude these variables from our model.</p>
+<p>The testing data set has no outcome variable but has an identifier column instead which we already expected. Now let&#39;s have a look at NA&#39;s. If we find fields that have lots of NA&#39;s in the testing data set it would be sensible to exclude these variables from our model.</p>
 
 <pre><code class="r">library(plyr)
-naPropSubmission &lt;- sapply(1:dim(submission)[2], function(x){mean(is.na(submission[, x]))})
-count(data.frame(naPropSubmission), &quot;naPropSubmission&quot;)
+naProptesting &lt;- sapply(1:dim(testing)[2], function(x){mean(is.na(testing[, x]))})
+count(data.frame(naProptesting), &quot;naProptesting&quot;)
 </code></pre>
 
-<pre><code>##   naPropSubmission freq
-## 1                0   60
-## 2                1  100
+<pre><code>##   naProptesting freq
+## 1             0   60
+## 2             1  100
 </code></pre>
 
-<p>100 variables in the submission data set have no value at all. We don&#39;t want them in our model so we remove them from our training data set.</p>
+<p>100 variables in the testing data set have no value at all. We don&#39;t want them in any of our models so we remove them from our training data set.</p>
 
-<pre><code class="r">trainingSubset &lt;- training[, naPropSubmission &lt; 1]
+<pre><code class="r">trainingSubset &lt;- training[, naProptesting &lt; 1]
 naPropTraining &lt;- sapply(1:dim(trainingSubset)[2], function(x){mean(is.na(trainingSubset[, x]))})
 count(data.frame(naPropTraining), &quot;naPropTraining&quot;)
 </code></pre>
@@ -254,32 +275,22 @@ count(data.frame(naPropTraining), &quot;naPropTraining&quot;)
 ## 1              0   60
 </code></pre>
 
-<p>Now all our training and submission variables have no NA&#39;s left at all. Let&#39;s look at the first columns of the submission data set.</p>
+<p>Now all our training have no NA&#39;s left at all in either data set. Let&#39;s look at the first columns of the training data set.</p>
 
-<pre><code class="r">submission[1:6]
+<pre><code class="r">trainingSubset[1:10, 1:6]
 </code></pre>
 
 <pre><code>##     X user_name raw_timestamp_part_1 raw_timestamp_part_2   cvtd_timestamp
-## 1   1     pedro           1323095002               868349 05/12/2011 14:23
-## 2   2    jeremy           1322673067               778725 30/11/2011 17:11
-## 3   3    jeremy           1322673075               342967 30/11/2011 17:11
-## 4   4    adelmo           1322832789               560311 02/12/2011 13:33
-## 5   5    eurico           1322489635               814776 28/11/2011 14:13
-## 6   6    jeremy           1322673149               510661 30/11/2011 17:12
-## 7   7    jeremy           1322673128               766645 30/11/2011 17:12
-## 8   8    jeremy           1322673076                54671 30/11/2011 17:11
-## 9   9  carlitos           1323084240               916313 05/12/2011 11:24
-## 10 10   charles           1322837822               384285 02/12/2011 14:57
-## 11 11  carlitos           1323084277                36553 05/12/2011 11:24
-## 12 12    jeremy           1322673101               442731 30/11/2011 17:11
-## 13 13    eurico           1322489661               298656 28/11/2011 14:14
-## 14 14    jeremy           1322673043               178652 30/11/2011 17:10
-## 15 15    jeremy           1322673156               550750 30/11/2011 17:12
-## 16 16    eurico           1322489713               706637 28/11/2011 14:15
-## 17 17     pedro           1323094971               920315 05/12/2011 14:22
-## 18 18  carlitos           1323084285               176314 05/12/2011 11:24
-## 19 19     pedro           1323094999               828379 05/12/2011 14:23
-## 20 20    eurico           1322489658               106658 28/11/2011 14:14
+## 1   1  carlitos           1323084231               788290 05/12/2011 11:23
+## 2   2  carlitos           1323084231               808298 05/12/2011 11:23
+## 3   3  carlitos           1323084231               820366 05/12/2011 11:23
+## 4   4  carlitos           1323084232               120339 05/12/2011 11:23
+## 5   5  carlitos           1323084232               196328 05/12/2011 11:23
+## 6   6  carlitos           1323084232               304277 05/12/2011 11:23
+## 7   7  carlitos           1323084232               368296 05/12/2011 11:23
+## 8   8  carlitos           1323084232               440390 05/12/2011 11:23
+## 9   9  carlitos           1323084232               484323 05/12/2011 11:23
+## 10 10  carlitos           1323084232               484434 05/12/2011 11:23
 ##    new_window
 ## 1          no
 ## 2          no
@@ -291,56 +302,81 @@ count(data.frame(naPropTraining), &quot;naPropTraining&quot;)
 ## 8          no
 ## 9          no
 ## 10         no
-## 11         no
-## 12         no
-## 13         no
-## 14         no
-## 15         no
-## 16         no
-## 17         no
-## 18         no
-## 19         no
-## 20         no
 </code></pre>
 
-<p>The goal of the assignment is to predict the outcome with data from the accelerometers which is why we will exclude the timestamp and time window information from our model. The X column looks to be some kind of identifier or row number. Let&#39;s verify this by testing it for uniqueness and its range in both data sets.</p>
+<p>The X column looks to be some kind of identifier or row number. Let&#39;s verify this by testing it for uniqueness and its range in both data sets.</p>
 
 <pre><code class="r">data.frame (
-    data_set = c(&quot;training&quot;, &quot;submission&quot;),
-    unique_x = c(length(unique(training$X)), length(unique(submission$X))),
-    min_x    = c(min(unique(training$X)), min(unique(submission$X))),
-    max_x    = c(max(unique(training$X)), max(unique(submission$X))),
-    rows     = c(dim(training)[1], dim(submission)[1])
+    data_set = c(&quot;training&quot;, &quot;testing&quot;),
+    unique_x = c(length(unique(training$X)), length(unique(testing$X))),
+    min_x    = c(min(unique(training$X)), min(unique(testing$X))),
+    max_x    = c(max(unique(training$X)), max(unique(testing$X))),
+    rows     = c(dim(training)[1], dim(testing)[1])
 )
 </code></pre>
 
-<pre><code>##     data_set unique_x min_x max_x  rows
-## 1   training    19622     1 19622 19622
-## 2 submission       20     1    20    20
+<pre><code>##   data_set unique_x min_x max_x  rows
+## 1 training    19622     1 19622 19622
+## 2  testing       20     1    20    20
 </code></pre>
 
-<p>This proves it and makes us exclude the variable from our model as well. Now let&#39;s have a look at the user column. We want to if both data sets cover the same users and how many training data we have per user.</p>
+<p>This confirms our assumption so we decide to exclude the variable from all our models as well. But before we do that let&#39;s have a look at the user column. We want to know if both data sets cover the same users and how many training data we have per user.</p>
 
 <pre><code class="r">trainingUsers &lt;- count(training, &quot;user_name&quot;)
 names(trainingUsers)[2] &lt;- &quot;training_records&quot;
-submissionUsers &lt;- count(submission, &quot;user_name&quot;)
-names(submissionUsers)[2] &lt;- &quot;submission_records&quot;
-merge(trainingUsers, submissionUsers)
+testingUsers &lt;- count(testing, &quot;user_name&quot;)
+names(testingUsers)[2] &lt;- &quot;testing_records&quot;
+merge(trainingUsers, testingUsers)
 </code></pre>
 
-<pre><code>##   user_name training_records submission_records
-## 1    adelmo             3892                  1
-## 2  carlitos             3112                  3
-## 3   charles             3536                  1
-## 4    eurico             3070                  4
-## 5    jeremy             3402                  8
-## 6     pedro             2610                  3
+<pre><code>##   user_name training_records testing_records
+## 1    adelmo             3892               1
+## 2  carlitos             3112               3
+## 3   charles             3536               1
+## 4    eurico             3070               4
+## 5    jeremy             3402               8
+## 6     pedro             2610               3
 </code></pre>
 
-<p>We have several thousand training observations per user in the submission data set. This enables us to build a separate model per user.</p>
+<p>We have several thousand training observations per user in the testing data set. Using the user name in our model could therefore lead to overfitting. But as described above an overfitted model might be helpful for the second part of the assignment so we decide to keep the user name to include it in at least one of our models. For the same reason we decide to keep the time stamp columns.</p>
+
+<pre><code class="r">trainingFinal &lt;- trainingSubset[, -1]
+</code></pre>
+
+<h2>Partitioning of the Training Data Set</h2>
+
+<p>Now we split our training data set into a &ldquo;final&rdquo; training and a validation data set. We call both sets partitions to emphasize their difference from the original data sets.</p>
 
 <pre><code class="r">library(caret)
+seed &lt;- 20141119
+set.seed(seed)
+trainPartInd &lt;- createDataPartition(training$classe, p = 0.7, list = FALSE)
+trainPart &lt;- trainingFinal[trainPartInd, ]
+testPart &lt;- trainingFinal[-trainPartInd, ]
 </code></pre>
+
+<h2>Model Building</h2>
+
+<p>We build all our models with the random forests algorithm and use 10-fold cross-validation for each training. We try out three models that differ in their predictors:</p>
+
+<ul>
+<li><em>Model 1</em>: all non-outcome variables</li>
+<li><em>Model 2</em>: all non-outcome variables except user name</li>
+<li><em>Model 3</em>: all non-outcome variables except user name and timestamp/time window variables</li>
+</ul>
+
+<pre><code class="r">ctrl &lt;- trainControl(method = &quot;cv&quot;, number = 10)
+set.seed(seed)
+model1 &lt;- train(classe ~ ., data = trainPart, method = &quot;rf&quot;, trControl = ctrl)
+set.seed(seed)
+model2 &lt;- train(classe ~ . - user_name, data = trainPart, method = &quot;rf&quot;, trControl = ctrl)
+set.seed(seed)
+model3 &lt;- train(classe ~ . - user_name - raw_timestamp_part_1 - raw_timestamp_part_2 - cvtd_timestamp - new_window, data = trainPart, method = &quot;rf&quot;, trControl = ctrl)
+</code></pre>
+
+<h2>Model Evaluation</h2>
+
+<h2>Model Selection</h2>
 
 </body>
 

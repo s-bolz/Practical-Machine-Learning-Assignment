@@ -5,83 +5,206 @@ This analysis is part of the programming assignment for the MOOC
 uses the
 [Weight Lifting Dataset](http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201)
 by E. Velloso, A. Bulling, H. Gellersen, W. Ugulino, and H. Fuks to predict the
-quality of barbell lifts.
+quality of barbell lifts. The assignment consists of two parts:
+
+1. this report that details the process of finding a model that predicts the quality of the exercise on a given training data set
+2. prediction on a given testing data set of which we do not know the outcome
+
+## Model Building Strategy
+
+The grade of the second part of the assignment is based on the prediction success rate of our model on the testing data set. In order to achieve the highest grade we should find a model that is tuned perfectly on the test set - even if it is overfitted. So we decide against following the standard procedure of exploring only our training data and holding back the testing data until the end where we predict on it only once. On the other hand we still want to reduce overfitting as much as possible. Therefore we follow the following model building strategy:
+
+1. minimal exploratory data analysis on the training and testing data sets
+2. splitting of the training data set into a training and a testing partition
+3. building several models with cross-validation against the training partition
+4. evaluating the models against the testing partition
+5. selecting a model based on its purpose
+
+We choose to build our models using the random forests algorithm with 10-fold cross-validation.
 
 ## Loading, Subsetting and Splitting the Data
 
-We start with downloading the training and testing data sets and loading both sets into R. We rename the testing data set into submission data set as we will later split off a testing data set from our training data set with which we estimate the out of sample error rate.
+We start with downloading the training and testing data sets and loading both sets into R.
 
 ```{r, cache = TRUE}
 download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "pml-training.csv", "curl")
-download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-submission.csv", "pml-submission.csv", "curl")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "pml-testing.csv", "curl")
 training <- read.csv("pml-training.csv")
-submission <- read.csv("pml-testing.csv")
+testing <- read.csv("pml-testing.csv")
 ```
+
+## Exploratory Data Analysis
 
 What are the dimensions of both data sets?
 
 ```{r}
 data.frame (
     trainingDimensions = dim(training),
-    submissionDimensions  = dim(submission)
+    testingDimensions  = dim(testing)
 )
 ```
 
-Both data sets have the same number of columns. Let's have a look if some of them are different.
+Both sets have the same number of columns. Let's have a look if some of them are different.
 
 ```{r}
 data.frame (
-    notInsubmission  = setdiff(names(training), names(submission)),
-    notInTraining = setdiff(names(submission), names(training))
+    notIntesting  = setdiff(names(training), names(testing)),
+    notInTraining = setdiff(names(testing), names(training))
 )
 ```
 
-The submission data set has no outcome variable but has an identifier column instead. This was expected and does not offer us any possibility to reduce the predictors from the training set. Now let's have a look at NA's. If we find fields that have lots of NA's in the submission data set it would be sensible to exclude these variables from our model.
+The testing data set has no outcome variable but has an identifier column instead which we already expected. Now let's have a look at NA's. If we find fields that have lots of NA's in the testing data set it would be sensible to exclude these variables from our model.
 
 ```{r}
 library(plyr)
-naPropSubmission <- sapply(1:dim(submission)[2], function(x){mean(is.na(submission[, x]))})
-count(data.frame(naPropSubmission), "naPropSubmission")
+naProptesting <- sapply(1:dim(testing)[2], function(x){mean(is.na(testing[, x]))})
+count(data.frame(naProptesting), "naProptesting")
 ```
 
-100 variables in the submission data set have no value at all. We don't want them in our model so we remove them from our training data set.
+100 variables in the testing data set have no value at all. We don't want them in any of our models so we remove them from our training data set.
 
 ```{r}
-trainingSubset <- training[, naPropSubmission < 1]
+trainingSubset <- training[, naProptesting < 1]
 naPropTraining <- sapply(1:dim(trainingSubset)[2], function(x){mean(is.na(trainingSubset[, x]))})
 count(data.frame(naPropTraining), "naPropTraining")
 ```
 
-Now all our training and submission variables have no NA's left at all. Let's look at the first columns of the submission data set.
+Now all our training have no NA's left at all in either data set. Let's look at the first columns of the training data set.
 
 ```{r}
-submission[1:6]
+trainingSubset[1:10, 1:6]
 ```
 
-The goal of the assignment is to predict the outcome with data from the accelerometers which is why we will exclude the timestamp and time window information from our model. The X column looks to be some kind of identifier or row number. Let's verify this by testing it for uniqueness and its range in both data sets.
+The X column looks to be some kind of identifier or row number. Let's verify this by testing it for uniqueness and its range in both data sets.
 
 ```{r}
 data.frame (
-    data_set = c("training", "submission"),
-    unique_x = c(length(unique(training$X)), length(unique(submission$X))),
-    min_x    = c(min(unique(training$X)), min(unique(submission$X))),
-    max_x    = c(max(unique(training$X)), max(unique(submission$X))),
-    rows     = c(dim(training)[1], dim(submission)[1])
+    data_set = c("training", "testing"),
+    unique_x = c(length(unique(training$X)), length(unique(testing$X))),
+    min_x    = c(min(unique(training$X)), min(unique(testing$X))),
+    max_x    = c(max(unique(training$X)), max(unique(testing$X))),
+    rows     = c(dim(training)[1], dim(testing)[1])
 )
 ```
 
-This proves it and makes us exclude the variable from our model as well. Now let's have a look at the user column. We want to if both data sets cover the same users and how many training data we have per user.
+This confirms our assumption so we decide to exclude the variable from all our models as well. But before we do that let's have a look at the user column. We want to know if both data sets cover the same users and how many training data we have per user.
 
 ```{r}
 trainingUsers <- count(training, "user_name")
 names(trainingUsers)[2] <- "training_records"
-submissionUsers <- count(submission, "user_name")
-names(submissionUsers)[2] <- "submission_records"
-merge(trainingUsers, submissionUsers)
+testingUsers <- count(testing, "user_name")
+names(testingUsers)[2] <- "testing_records"
+merge(trainingUsers, testingUsers)
 ```
 
-We have several thousand training observations per user in the submission data set. This enables us to build a separate model per user.
+We have several thousand training observations per user in the testing data set. Using the user name in our model could therefore lead to overfitting. But as described above an overfitted model might be helpful for the second part of the assignment so we decide to keep the user name to include it in at least one of our models. For the same reason we decide to keep the time stamp columns.
+
+```{r}
+trainingFinal <- trainingSubset[, -1]
+```
+
+## Partitioning of the Training Data Set
+
+Now we split our training data set into a "final" training and a testing data set. We call both sets partitions to emphasize their difference from the original data sets.
 
 ```{r}
 library(caret)
+seed <- 20141119
+set.seed(seed)
+trainPartInd <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+trainPart <- trainingFinal[trainPartInd, ]
+testPart <- trainingFinal[-trainPartInd, ]
 ```
+
+## Model Building
+
+We build all our models with the random forests algorithm and use 10-fold cross-validation for each training. We try out three models that only differ in their predictors:
+
+* _Model 1_: all non-outcome variables
+* _Model 2_: all non-outcome variables except user name
+* _Model 3_: all non-outcome variables except user name and timestamp/time window variables
+
+```{r, cache = TRUE}
+ctrl <- trainControl(method = "cv", number = 10)
+set.seed(seed)
+model1 <- train (
+    classe ~ .,
+    data = trainPart,
+    method = "rf",
+    trControl = ctrl
+)
+set.seed(seed)
+model2 <- train (
+    classe ~ . - user_name,
+    data = trainPart,
+    method = "rf",
+    trControl = ctrl
+)
+set.seed(seed)
+model3 <- train (
+    classe ~ . - user_name - raw_timestamp_part_1 - raw_timestamp_part_2 - cvtd_timestamp - num_window,
+    data = trainPart,
+    method = "rf",
+    trControl = ctrl
+)
+```
+
+## Model Evaluation
+
+### Model 1 - Using All Predictors
+
+```{r}
+model1; model1$finalModel;
+```
+
+Our first model has a very high accuracy with 99,9%. Its out-of-bag error rate is 0.07 % which is very good as well. However cross-validation and the out-of-bag error rate only help us to reduce bias but do not protect our model from overfitting. In order to analyze its predicting capabilities on a new data set we use it to predict our testing partition and build a confusion matrix on our prediction.
+
+```{r}
+confusionMatrix(predict(model1, newdata = testPart), testPart$classe)
+```
+
+We still have a very high accuracy of 99,9 %. Also the sensitivity and specificity of all classes are very close to 1 as well. Let's have a look at the most important variables in our model.
+
+```{r}
+varImp(model1)
+```
+
+It is interesting that the user name is not ranked among the 20 most important variables. The most important by far is the raw timestamp part 1 which has the maximum score of 100. It is followed by the window number which still has a very high score with almost 45.
+
+According to the [documentation](http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf) the features were extracted using a sliding window approach with different lengths from 0.5 to 2.5 seconds. Also the measurements of each exercise were aggregated over the time window. The aggregation features have already been removed from our model when we removed all variables from our training data set that are completely NA in the testing data set. The time window information is still present in the timestamp and window variables. Using them in our first model combined with their extrem high importance makes this model very strongly tuned to the data gathering of our sample data set. Thus we have to assume that our first model is overfitted even though the user name does not contribute very much to it.
+
+### Model 2 - Using All Predictors Except User Name
+
+```{r}
+model2; model2$finalModel;
+```
+
+Accuracy and out-of-bag error rate are (almost) identical to our first model. We could have expected a close similarity to those values of our first model as we already saw that the user name did not have a strong influence on that model. Let's have a look at the confusion matrix of our testing partition prediction.
+
+```{r}
+confusionMatrix(predict(model2, newdata = testPart), testPart$classe)
+```
+
+Our second model achieved a slightly higher accuracy on the test set as it had one more correct classification. What about the most important variables?
+
+```{r}
+varImp(model2)
+```
+
+The top 20 variables are the same as in our first model and even the scores are very similar. Therefore we have to assume overfitting of this model for the same reasons as for our first model.
+
+### Model 3 - Using All Predictors Except User Name and Time Related Variables
+
+```{r}
+model3; model3$finalModel;
+```
+
+```{r}
+confusionMatrix(predict(model3, newdata = testPart), testPart$classe)
+```
+
+```{r}
+varImp(model3)
+```
+
+## Model Selection
