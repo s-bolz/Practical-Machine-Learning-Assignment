@@ -1,5 +1,10 @@
 # Human Activity Recognition Analysis
 
+```{r setoptions, echo = FALSE}
+# disable scientific notation and round with 6 digits for the whole report
+options(scipen = 999, digits = 6)
+```
+
 This analysis is part of the programming assignment for the MOOC
 [Practical Machine Learning](https://www.coursera.org/course/predmachlearn). It
 uses the
@@ -24,7 +29,7 @@ We choose to build our models using the random forests algorithm with 10-fold cr
 
 ## Loading, Subsetting and Splitting the Data
 
-We start with downloading the training and testing data sets and loading both sets into R.
+We start with downloading the training and testing data sets and then load both sets into R.
 
 ```{r, cache = TRUE}
 download.file (
@@ -77,7 +82,7 @@ naPropTraining <- sapply(1:dim(trainingSubset)[2], function(x){mean(is.na(traini
 count(data.frame(naPropTraining), "naPropTraining")
 ```
 
-Now all our training have no NA's left at all in either data set. Let's look at the first columns of the training data set.
+Now we have no NA's left at all in either data set. Let's look at the first columns of the training data set.
 
 ```{r}
 trainingSubset[1:10, 1:6]
@@ -113,7 +118,7 @@ trainingFinal <- trainingSubset[, -1]
 
 ## Partitioning of the Training Data Set
 
-Now we split our training data set into a "final" training and a testing data set. We call both sets partitions to emphasize their difference from the original data sets.
+Now we split our training data set into "final" training and testing data sets. We call both sets partitions to emphasize their difference from the original data sets.
 
 ```{r}
 library(caret)
@@ -171,7 +176,7 @@ sampleAccuracies <- data.frame (
 ggplot(sampleAccuracies, aes(Resample, Accuracy, colour = Model)) + geom_line(aes(group = Model))
 ```
 
-The first two models seem to work better than the third model as the highest accuracy of our third model lies below the highest accuracy of our first two models. For folds 6 and 8 the first model is even slightly more accurate than model two, but both models have folds with higher accuracies so that this doesn't matter.
+The first two models seem to work better on the training data than the third model as the highest accuracy of our third model lies below the highest accuracy of our first two models. For folds 6 and 8 the first model is even slightly more accurate than model two, but both models have folds with higher accuracies that would have been picked for the final model so this doesn't really matter.
 
 Next let's take a look at the final models and compare their out-of-bag error rates per tree. As all models have been built with the same number of trees (500) per sample we can compare them in the same plot.
 
@@ -196,7 +201,7 @@ Again the first two models are very close to each other and the third model has 
 model1; model1$finalModel;
 ```
 
-With 99.9% our first model has a very high accuracy. Its out-of-bag error rate is 0.07% which is very good as well. However cross-validation and the out-of-bag error rate only help us to reduce bias but do not protect our model from overfitting. In order to analyze its predicting capabilities on a new data set we use it to predict our testing partition and build a confusion matrix on our prediction.
+With 99.9% our first model has a very high accuracy. Its out-of-bag error rate is 0.07% which is very good as well. However cross-validation and the out-of-bag error rate only help us to reduce bias but do not protect our model from overfitting. In order to analyze its predicting capabilities on a new data set we use the first model to predict our testing partition and build a confusion matrix on our prediction.
 
 ```{r}
 confusionMatrix(predict(model1, newdata = testPart), testPart$classe)
@@ -210,7 +215,11 @@ varImp(model1)
 
 It is interesting that the user name is not ranked among the 20 most important variables. The most important by far is the raw timestamp part 1 which has the maximum score of 100. It is followed by the window number which still has a very high score with almost 45.
 
-According to the [documentation](http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf) the features were extracted using a sliding window approach with different lengths from 0.5 to 2.5 seconds. Also the measurements of each exercise were aggregated over the time window. The aggregation features have already been removed from our model when we removed all variables from our training data set that are completely NA in the testing data set. The time window information is still present in the timestamp and window variables. Using them in our first model combined with their extrem high importance makes this model very strongly tuned to the data gathering of our sample data set. Thus we have to assume that our first model is overfitted even though the user name does not contribute very much to it.
+According to the [documentation](http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf) the features were extracted using
+
+> a sliding window approach with different lengths from 0.5 second to 2.5 seconds, with 0.5 second overlap.
+
+Also the measurements of each exercise were aggregated over the time window. The aggregation features have already been removed from our model when we removed all variables from our training data set that are completely NA in the testing data set. The time window information is still present in the timestamp and window variables. Using them in our first model combined with their extrem high importance makes this model very strongly tuned to the method of data gathering for our sample data set. Thus we have to assume that our first model is overfitted even though the user name does not contribute very much to it.
 
 ### Model 2 - Using All Predictors Except User Name
 
@@ -244,7 +253,7 @@ The accuracy of our third model is a bit (0.8%) less than that of our first two 
 confusionMatrix(predict(model3, newdata = testPart), testPart$classe)
 ```
 
-With 31 misclassifications out of the third model has 27 more than our first and 28 more than our second model. Thus its accuracy is about 0.5% lower than that of our first two models. This is great news as the accuracy is still very high whilst this model presumably does not overfit as much as our first two models. Let's look at the most important variables.
+With 30 misclassifications out of the third model has 26 more than our first and 27 more than our second model. Thus its accuracy is about 0.5% lower than that of our first two models. This is great news as the accuracy is still very high whilst this model presumably does not overfit as much as our first two models. Let's look at the most important variables.
 
 ```{r}
 varImp(model3)
@@ -254,9 +263,9 @@ This time our model completely relies on measurements that can be taken in a dif
 
 ## Model Selection
 
-We identified two models that are presumably overfitted and one model that is at least less overfitted. We would thus recommend the third model to be used on new data to predict the exercise quality of any user regardless of the time information. We estimate its error rate on this new data as 1 minus its accuracy on our testing partition which is `r round(1 - confusionMatrix(predict(model3, newdata = testPart), testPart$classe)$overall[1], 4)`.
+We identified two models that are presumably overfitted and one model that is at least less overfitted. We would thus recommend the third model to be used on new data to predict the exercise quality of any user regardless of the time information. We estimate its error rate on this new data as 1 minus its accuracy on our testing partition which results in `r round(1 - confusionMatrix(predict(model3, newdata = testPart), testPart$classe)$overall[1], 4)`.
 
-However, for the second part of this assignment, where we have to classify the `r nrow(testing)` cases from our testing data set we might use model 2 as it has a higher accuracy on our test partition and we assume that the test cases have been split off from the same sample. Before we make a final decision as to which model to use for that data set let's take a look how much the predictions of all our 3 models differ from each other.
+However, for the second part of this assignment, where we have to classify the `r nrow(testing)` cases from our testing data set we might use the second model as it has the highest accuracy on our test partition and we assume that the test cases have been split off from the same sample. Before we make a final decision as to which model to use for that data set let's take a look at how much the predictions of all our 3 models differ from each other.
 
 ```{r}
 testingPredictions <- data.frame (
@@ -274,4 +283,4 @@ The first two models predict exactly the same classes.
 table(testingPredictions$Model2.Predictions, testingPredictions$Model3.Predictions)
 ```
 
-The third model predicts exactly the same outcome as the first two models as well. This makes it easy for us, so we can safely use the third model for the second part of the assignment as well and keep our conscience clear as we don't use an obviously overfitted model. Still our third model might still be a bit overfitted, because we built it after doing the exploratory data analysis with the complete data instead of only our training partition. This might led us to some decisions that we would not have done after exploring only the training partition. This is a risk we were willing to take and which cannot be helped now.
+The third model also predicts exactly the same outcome as the first two models. This makes it easy for us, because we can now safely use the third model for the second part of the assignment and keep our conscience clear as we don't use an obviously overfitted model. However, our third model might still be a bit overfitted, because we built it after doing the exploratory data analysis on the complete data instead of only our training partition. This might led us to some decisions that we would not have made after exploring only the training partition. But that is a risk we were willing to take and which cannot be helped now.
