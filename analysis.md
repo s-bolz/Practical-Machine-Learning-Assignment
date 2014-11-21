@@ -578,7 +578,7 @@ model3; model3$finalModel;
 ## E    0    0    0    6 2519  0.00237624
 ```
 
-The accuracy of our third model is a bit (0.8%) less than that of our first two models and the out-of-bag error rate is a bit (0.64%) higher. However, both values are still very good - even for the training data. Let's have a look at the accuracy on the testing partition.
+The accuracy of our third model is a bit (0.7%) less than that of our first two models and the out-of-bag error rate is a bit (0.64%) higher. However, both values are still very good - even for the training data. Let's have a look at the accuracy on the testing partition.
 
 
 ```r
