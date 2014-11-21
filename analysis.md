@@ -572,7 +572,7 @@ model3; model3$finalModel;
 ## E    0    0    0    6 2519    0.002376
 ```
 
-The accuracy of our third model is a bit (0.8%) less than that of our first two models and the out-of-bag error rate is a bit (0.64%) higher. However, both values are still very good - even for the training data. Let's have a look at the accuracy on the test partition.
+The accuracy of our third model is a bit (0.8%) less than that of our first two models and the out-of-bag error rate is a bit (0.64%) higher. However, both values are still very good - even for the training data. Let's have a look at the accuracy on the testing partition.
 
 
 ```r
@@ -651,3 +651,47 @@ varImp(model3)
 This time our model completely relies on measurements that can be taken in a different setup with other or no time windows as well. So we can assume that this model is the least overfitted model and thus works best on completely new data.
 
 ## Model Selection
+
+We identified two models that are presumably overfitted and one model that is at least less overfitted. We would thus recommend the third model to be used on new data to predict the exercise quality of any user regardless of the time information. We estimate its error rate on this new data as 1 minus its accuracy on our testing partition which is 0.0051.
+
+However, for the second part of this assignment, where we have to classify the 20 cases from our testing data set we might use model 2 as it has a higher accuracy on our test partition and we assume that the test cases have been split off from the same sample. Before we make a final decision as to which model to use for that data set let's take a look how much the predictions of all our 3 models differ from each other.
+
+
+```r
+testingPredictions <- data.frame (
+    Problem.ID = testing$problem_id,
+    Model1.Predictions = predict(model1, testing),
+    Model2.Predictions = predict(model2, testing),
+    Model3.Predictions = predict(model3, testing)
+)
+table(testingPredictions$Model1.Predictions, testingPredictions$Model2.Predictions)
+```
+
+```
+##    
+##     A B C D E
+##   A 7 0 0 0 0
+##   B 0 8 0 0 0
+##   C 0 0 1 0 0
+##   D 0 0 0 1 0
+##   E 0 0 0 0 3
+```
+
+The first two models predict exactly the same classes.
+
+
+```r
+table(testingPredictions$Model2.Predictions, testingPredictions$Model3.Predictions)
+```
+
+```
+##    
+##     A B C D E
+##   A 7 0 0 0 0
+##   B 0 8 0 0 0
+##   C 0 0 1 0 0
+##   D 0 0 0 1 0
+##   E 0 0 0 0 3
+```
+
+The third model predicts exactly the same outcome as the first two models as well. This makes it easy for us, so we can safely use the third model for the second part of the assignment as well and keep our conscience clear as we don't use an obviously overfitted model. Still our third model might still be a bit overfitted, because we built it after doing the exploratory data analysis with the complete data instead of only our training partition. This might led us to some decisions that we would not have done after exploring only the training partition. This is a risk we were willing to take and which cannot be helped now.
