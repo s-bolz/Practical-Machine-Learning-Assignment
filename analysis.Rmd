@@ -27,8 +27,16 @@ We choose to build our models using the random forests algorithm with 10-fold cr
 We start with downloading the training and testing data sets and loading both sets into R.
 
 ```{r, cache = TRUE}
-download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "pml-training.csv", "curl")
-download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "pml-testing.csv", "curl")
+download.file (
+    "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+    "pml-training.csv",
+    "curl"
+)
+download.file (
+    "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+    "pml-testing.csv",
+    "curl"
+)
 training <- read.csv("pml-training.csv")
 testing <- read.csv("pml-testing.csv")
 ```
@@ -151,19 +159,50 @@ model3 <- train (
 
 ## Model Evaluation
 
+We start by comparing the model accuracies of each cross-validation sample.
+
+```{r}
+library(ggplot2)
+sampleAccuracies <- data.frame (
+    Model = rep(c("Model 1", "Model 2", "Model 3"), each = 10),
+    Resample = c(model1$resample$Resample, model2$resample$Resample, model3$resample$Resample),
+    Accuracy = c(model1$resample$Accuracy, model2$resample$Accuracy, model3$resample$Accuracy)
+)
+ggplot(sampleAccuracies, aes(Resample, Accuracy, colour = Model)) + geom_line(aes(group = Model))
+```
+
+The first two models seem to work better than the third model as the highest accuracy of our third model lies below the highest accuracy of our first two models. For folds 6 and 8 the first model is even slightly more accurate than model two, but both models have folds with higher accuracies so that this doesn't matter.
+
+Next let's take a look at the final models and compare their out-of-bag error rates per tree. As all models have been built with the same number of trees (500) per sample we can compare them in the same plot.
+
+```{r}
+modelErrors <- data.frame (
+    Model = rep(c("Model 1", "Model 2", "Model 3"), each = 500),
+    Tree = rep(1:500, 3),
+    OOB.Error = c (
+        model1$finalModel$err.rate[, 1],
+        model2$finalModel$err.rate[, 1],
+        model3$finalModel$err.rate[, 1]
+    )
+)
+ggplot(modelErrors, aes(Tree, OOB.Error, colour = Model)) + geom_line()
+```
+
+Again the first two models are very close to each other and the third model has a slightly higher error. We will now analyze each model a bit more in depth to understand how well all the trees have been aggregated into a single model.
+
 ### Model 1 - Using All Predictors
 
 ```{r}
 model1; model1$finalModel;
 ```
 
-Our first model has a very high accuracy with 99,9%. Its out-of-bag error rate is 0.07 % which is very good as well. However cross-validation and the out-of-bag error rate only help us to reduce bias but do not protect our model from overfitting. In order to analyze its predicting capabilities on a new data set we use it to predict our testing partition and build a confusion matrix on our prediction.
+With 99.9% our first model has a very high accuracy. Its out-of-bag error rate is 0.07% which is very good as well. However cross-validation and the out-of-bag error rate only help us to reduce bias but do not protect our model from overfitting. In order to analyze its predicting capabilities on a new data set we use it to predict our testing partition and build a confusion matrix on our prediction.
 
 ```{r}
 confusionMatrix(predict(model1, newdata = testPart), testPart$classe)
 ```
 
-We still have a very high accuracy of 99,9 %. Also the sensitivity and specificity of all classes are very close to 1 as well. Let's have a look at the most important variables in our model.
+We still have a very high accuracy of 99,9%. Also the sensitivity and specificity of all classes are very close to 1 as well. Let's have a look at the most important variables in our model.
 
 ```{r}
 varImp(model1)
@@ -199,12 +238,20 @@ The top 20 variables are the same as in our first model and even the scores are 
 model3; model3$finalModel;
 ```
 
+The accuracy of our third model is a bit (0.8%) less than that of our first two models and the out-of-bag error rate is a bit (0.64%) higher. However, both values are still very good - even for the training data. Let's have a look at the accuracy on the test partition.
+
 ```{r}
 confusionMatrix(predict(model3, newdata = testPart), testPart$classe)
+.9995 - .9947
+.9993 - .9947
 ```
+
+With 31 misclassifications out of the third model has 27 more than our first and 28 more than our second model. Thus its accuracy is about 0.5% lower than that of our first two models. This is great news as the accuracy is still very high whilst this model presumably does not overfit as much as our first two models. Let's look at the most important variables.
 
 ```{r}
 varImp(model3)
 ```
+
+This time our model completely relies on measurements that can be taken in a different setup with other or no time windows as well. So we can assume that this model is the least overfitted model and thus works best on completely new data.
 
 ## Model Selection
