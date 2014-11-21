@@ -242,8 +242,6 @@ The accuracy of our third model is a bit (0.8%) less than that of our first two 
 
 ```{r}
 confusionMatrix(predict(model3, newdata = testPart), testPart$classe)
-.9995 - .9947
-.9993 - .9947
 ```
 
 With 31 misclassifications out of the third model has 27 more than our first and 28 more than our second model. Thus its accuracy is about 0.5% lower than that of our first two models. This is great news as the accuracy is still very high whilst this model presumably does not overfit as much as our first two models. Let's look at the most important variables.

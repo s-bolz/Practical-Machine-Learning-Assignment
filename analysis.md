@@ -613,22 +613,6 @@ confusionMatrix(predict(model3, newdata = testPart), testPart$classe)
 ## Balanced Accuracy       0.999    0.993    0.993    0.997    1.000
 ```
 
-```r
-.9995 - .9947
-```
-
-```
-## [1] 0.0048
-```
-
-```r
-.9993 - .9947
-```
-
-```
-## [1] 0.0046
-```
-
 With 31 misclassifications out of the third model has 27 more than our first and 28 more than our second model. Thus its accuracy is about 0.5% lower than that of our first two models. This is great news as the accuracy is still very high whilst this model presumably does not overfit as much as our first two models. Let's look at the most important variables.
 
 
